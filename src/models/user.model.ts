@@ -31,6 +31,7 @@ const userSchema: Schema = new Schema ({
         unique: [true, "email already exists"],
         index: true
     } as any,
+    birthday: { type: Date, required: [true, "No birthday Provided"]}
 }, { timestamps: true });
 
 export default model<IUser>("user", userSchema);

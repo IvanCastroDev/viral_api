@@ -8,11 +8,11 @@ export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
 
     if (!await bcrypt.compare(password, req.user.password, ))
-        return res.status(401).json({message: "password is incorrect"});
+        return res.status(401).json({message: "Incorrect password"});
 
     const token = createToke(createTokenData(req.user)) 
 
-    return res.status(200).json({message: "done", username: req.user.username, email: req.user.email, token: token});
+    return res.status(200).json({username: req.user.username, token: token});
 };
 
 export const signIn = async (req: Request, res: Response) => {
@@ -23,7 +23,7 @@ export const signIn = async (req: Request, res: Response) => {
 
         let token = createToke(createTokenData(newUser));
         
-        return res.status(200).json({message: "done", username: newUser.username, email: newUser.email, token: token});
+        return res.status(200).json({username: newUser.username, token: token});
     } catch (err) {
         await handleError(err, res);
     }

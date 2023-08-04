@@ -7,4 +7,5 @@ export default interface IUser extends Document {
     lastName: string;
     password: string;
     email: string;
+    birthday: Date;
 };

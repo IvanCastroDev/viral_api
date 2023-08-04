@@ -6,7 +6,7 @@ export const validateUserData = async (req: Request, res: Response, next: NextFu
     const errors = await validate(req.body);
 
     if (errors)
-        return res.status(400).json({errors: errors});
+        return res.status(400).json({message: errors[0]});
 
     next(); 
 };
@@ -20,7 +20,7 @@ export const validateLoginData = async (req: Request, res: Response, next: NextF
     const userData = await userModel.findOne({email: req.body.email});
 
     if (!userData)
-        return res.status(404).json({message: "no user found"});
+        return res.status(404).json({message: "User not found"});
 
     req.user = userData;
 
