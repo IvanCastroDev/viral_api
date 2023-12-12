@@ -10,10 +10,12 @@ import loginRoutes from "./routes/login.routes";
 // Initalize the server
 const app = express();
 const version = "/v1";
-const NAMESPACE = "SERVE";
+const NAMESPACE = "SERVER";
 
 // Add initial configuration
-app.use(cors());
+app.use(cors({
+  origin: '*'
+}));
 app.use(express.urlencoded({extended: true})); 
 app.use(express.json());
 
@@ -46,6 +48,7 @@ app.use(version, loginRoutes);
 // Try to connect to MongoDB
 MongoConnection().then(() =>{
     app.listen(EXPRESS.port, () => {
+        console.info("Connection established");
         console.log('Server listening on port ' + EXPRESS.port);
     })
 }).catch(error => console.error(error));

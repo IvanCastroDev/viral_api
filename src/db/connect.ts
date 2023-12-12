@@ -8,7 +8,6 @@ const MongoConnection = () => {
         await mongoose.connect(MONGO.url, MONGO.options).catch((error) => 
             reject(error)
         );
-        console.info("Connection established");
         resolve();
     });
 };

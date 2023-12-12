@@ -4,7 +4,7 @@ import IUser from "../interfaces/user.interface";
 const userSchema: Schema = new Schema ({
     username: {
         type: String, 
-        required: [true, "No username Provided"], 
+        required: false,
         unique: true,
     },
     name: {
@@ -19,6 +19,18 @@ const userSchema: Schema = new Schema ({
         type: String, 
         required: [true, "No password Provided"]
     },
+    phone: {
+        type: String,
+        validate: {
+            validator: function(value: string) {
+                return /^([+]?52[]1[])?[0-9]{2}[0-9]{4}[0-9]{4}$/.test(value);
+            },
+            message: (props: { value: any; }) => `${props.value} is not a valid phone number`
+        },
+        required: [true, "No phone Number Provided"],
+        unique: [true, "This phone is not available"],
+        index: true
+    } as any,
     email: {
         type: String, 
         validate: {
@@ -28,10 +40,13 @@ const userSchema: Schema = new Schema ({
             message: (props: { value: any; }) => `${props.value} is not a valid Email`
         },
         required: [true, "No Email Provided"], 
-        unique: [true, "email already exists"],
+        unique: {
+            value: true,
+            message: 'El correo electrónico debe ser único'
+        },
         index: true
     } as any,
-    birthday: { type: Date, required: [true, "No birthday Provided"]}
+    birthday: { type: Date, required: false }
 }, { timestamps: true });
 
 export default model<IUser>("user", userSchema);
