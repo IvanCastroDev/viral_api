@@ -12,6 +12,9 @@ export const validateUserData = async (req: Request, res: Response, next: NextFu
     if (await userModel.findOne({ email: req.body.email }))
         return res.status(400).json({message: requestErrorMessages.EMAIL_IN_USE});
 
+    if (await userModel.findOne({ phone: req.body.phone }))
+        return res.status(400).json({message: requestErrorMessages.PHONE_IN_USE});
+
     next(); 
 };
 
