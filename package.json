@@ -26,6 +26,7 @@
     "moment-timezone": "^0.5.43",
     "mongodb": "^5.7.0",
     "mongoose": "^7.4.0",
+    "pg": "^8.11.3",
     "typescript": "^5.1.6"
   },
   "devDependencies": {
@@ -35,6 +36,7 @@
     "@types/jsonwebtoken": "^9.0.2",
     "@types/mongoose": "5.5.23",
     "@types/node": "^20.4.4",
+    "@types/pg": "^8.10.9",
     "tsc-watch": "^6.0.4"
   }
 }

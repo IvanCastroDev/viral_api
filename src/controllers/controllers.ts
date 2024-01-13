@@ -3,6 +3,7 @@ import userModel from "../models/user.model";
 import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
+import { hashConfigs } from "../configs/constants/configs";
 
 export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
@@ -10,9 +11,9 @@ export const login = async (req: Request, res: Response) => {
     if (!await bcrypt.compare(password, req.user.password, ))
         return res.status(401).json({message: "Incorrect password"});
 
-    const token = createToke(createTokenData(req.user)) 
+    const token = createToke(createTokenData(req.user));
 
-    return res.status(200).json({username: req.user.username, token: token});
+    return res.status(200).json({email: req.user.email, phone: req.user.phone, name: req.user.name, lastName: req.user.lastName, token: token});
 };
 
 export const signIn = async (req: Request, res: Response) => {
@@ -23,11 +24,31 @@ export const signIn = async (req: Request, res: Response) => {
 
         let token = createToke(createTokenData(newUser));
         
-        return res.status(200).json({username: newUser.username, token: token});
+        return res.status(200).json({token: token});
     } catch (err) {
         await handleError(err, res);
     }
 };
+
+export const portHandler = async (req: Request, res: Response) => {
+    console.log(req.user)
+};
+
+const getAltanToken = async () => {
+    var myHeaders = new Headers();
+    myHeaders.append("Authorization", "Basic d0NHYWlNTXJBRDdMTkR5d0owTDhkTGxjZnJQRzVJWmE6RHg1WWFubzdMQVhpdzFUYw==");
+
+    var requestOptions = {
+    method: 'POST',
+    headers: myHeaders,
+    redirect: 'follow'
+    };
+    
+};
+
+const updateUser = async (userEmail: string, data: any) => {
+    await userModel.findOneAndUpdate({email: userEmail}, data, {new: true});
+}
 
 const createUser = async (body: any): Promise<IUser> => {
     let user: IUser = new userModel();
@@ -43,7 +64,7 @@ const createTokenData = (userData: IUser) => {
 }
 
 const createToke = (userData: any): string => {
-    return jwt.sign({userData}, "myhash", {expiresIn: "7d"});
+    return jwt.sign({userData}, hashConfigs.HASH_STRING, {expiresIn: "365d"});
 }
 
 const handleError = async (error: any, res: Response): Promise<Response> => {

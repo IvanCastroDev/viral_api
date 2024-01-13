@@ -46,7 +46,8 @@ const userSchema: Schema = new Schema ({
         },
         index: true
     } as any,
-    birthday: { type: Date, required: false }
+    birthday: { type: Date, required: false },
+    token: { type: String, required: false}
 }, { timestamps: true });
 
 export default model<IUser>("user", userSchema);
