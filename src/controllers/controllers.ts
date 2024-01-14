@@ -4,6 +4,7 @@ import { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
+import { PG_CLIENT } from "../configs/constants/configs";
 
 export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
@@ -30,9 +31,17 @@ export const signIn = async (req: Request, res: Response) => {
     }
 };
 
+export const getMSISDN = async (req: Request, res: Response) => {
+    const MSISDN = (await PG_CLIENT.query("SELECT * FROM viral_numbers WHERE is_saled = false limit 1")).rows;
+    console.info("MSISDN", MSISDN)
+    return res.status(200).json({status: "success", number: MSISDN})
+};
+
 export const portHandler = async (req: Request, res: Response) => {
     console.log(req.user)
 };
+
+/* -------------------------------------------------------------------------- */
 
 const getAltanToken = async () => {
     var myHeaders = new Headers();
@@ -43,7 +52,7 @@ const getAltanToken = async () => {
     headers: myHeaders,
     redirect: 'follow'
     };
-    
+
 };
 
 const updateUser = async (userEmail: string, data: any) => {

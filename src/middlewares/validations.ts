@@ -40,7 +40,7 @@ export const validateToken = async (req: Request, res: Response, next: NextFunct
     if(!req.headers.authorization)
         return res.status(401).json({message: "Header authentication not found"})
 
-    let token = req.headers.authorization?.replace("Bearer ", "");
+    let token = req.headers.authorization?.replace("bearer ", "");
     let segment = token.split(".");
     
     try {
