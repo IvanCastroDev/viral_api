@@ -6,6 +6,11 @@ import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { PG_CLIENT } from "../configs/constants/configs";
 
+const altanURL = "https://altanredes-prod.apigee.net";
+const sandbox = "-sandbox";
+const isSandbox = true;
+let token = "";
+
 export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
 
@@ -33,8 +38,66 @@ export const signIn = async (req: Request, res: Response) => {
 
 export const getMSISDN = async (req: Request, res: Response) => {
     const MSISDN = (await PG_CLIENT.query("SELECT * FROM viral_numbers WHERE is_saled = false limit 1")).rows;
-    console.info("MSISDN", MSISDN)
-    return res.status(200).json({status: "success", number: MSISDN})
+
+    if (MSISDN.length == 0)
+        return res.status(400).json({status: "Error", type: "No MSISDN available", message: "No se encontraron MSISDN disponibles"});
+
+    return res.status(200).json({status: "success", number: MSISDN[0]})
+};
+
+export const pre_activate = async (req: Request, res: Response) => {
+    const { msisdn } = req.params;
+    const { offeringId } = req.body;
+
+    try {
+        let tokenError = false;
+        let done = false;
+        let Header = new Headers();
+        let retData = {};
+        let route = `${altanURL}/cm${isSandbox ? sandbox : ""}/v1/subscribers/${msisdn}/preregistered`;
+
+        let actualDate = getDate();
+        let expireEffectiveDate = getDate(new Date);
+
+        let body = JSON.stringify({
+            "offeringId": offeringId,
+            "startEffectiveDate": actualDate,
+            "expireEffectiveDate": expireEffectiveDate,
+            "scheduleDate": actualDate,
+            "idPoS": ""
+        });
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            console.log(token, route);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+    
+            const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+
+            retData = response;
+            done = true;
+        }
+
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        return res.status(501).json({status: "error", message: err});
+    }
+
+};
+
+export const isMSISDNAvailable = async (req: Request, res: Response) => {
+    const MSISDNCount = (await PG_CLIENT.query("SELECT COUNT(*) FROM viral_numbers WHERE is_saled = false")).rows;
+    
+    return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
 };
 
 export const portHandler = async (req: Request, res: Response) => {
@@ -43,16 +106,29 @@ export const portHandler = async (req: Request, res: Response) => {
 
 /* -------------------------------------------------------------------------- */
 
-const getAltanToken = async () => {
-    var myHeaders = new Headers();
-    myHeaders.append("Authorization", "Basic d0NHYWlNTXJBRDdMTkR5d0owTDhkTGxjZnJQRzVJWmE6RHg1WWFubzdMQVhpdzFUYw==");
+const getAltanToken =  (tokenError: boolean) => {
+    return new Promise( async (resolve, reject) => {
 
-    var requestOptions = {
-    method: 'POST',
-    headers: myHeaders,
-    redirect: 'follow'
-    };
+        if (token !== "" && !tokenError)
+            resolve(token)
 
+        var myHeaders = new Headers();
+        myHeaders.append("Authorization", "Basic d0NHYWlNTXJBRDdMTkR5d0owTDhkTGxjZnJQRzVJWmE6RHg1WWFubzdMQVhpdzFUYw==");
+        
+        try {
+            const response = await fetch(`${altanURL}/v1/oauth/accesstoken?grant-type=client_credentials`, {
+                method: 'POST',
+                headers: myHeaders
+            }).then((res) => res.json())
+    
+            token = response["accessToken"];
+            resolve(response["accessToken"]);
+
+        } catch (error: any) {
+            console.error(error)
+            reject(error);
+        }
+    })
 };
 
 const updateUser = async (userEmail: string, data: any) => {
@@ -93,4 +169,23 @@ const handleError = async (error: any, res: Response): Promise<Response> => {
             return res.status(500).json({message: "internal error", error: error});
             
     } 
+}
+
+function getDate(actualDate?: Date) {
+    if (actualDate) {
+        let fecha = new Date(actualDate);
+        fecha.setMonth(fecha.getMonth() + 1);
+        return formatDate(fecha)
+    }
+
+    let fecha = new Date();
+
+    return formatDate(fecha);
+}
+
+const formatDate = (fecha: Date) => {
+    var year = fecha.getFullYear();
+    var month = (fecha.getMonth() + 1).toString().padStart(2, '0');
+    var day = fecha.getDate().toString().padStart(2, '0');
+    return year + month + day;
 }
