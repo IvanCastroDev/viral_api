@@ -8,4 +8,5 @@ export default interface IUser extends Document {
     email: string;
     birthday: Date;
     phone: string;
+    token: string;
 };

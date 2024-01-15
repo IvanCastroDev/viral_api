@@ -1,11 +1,11 @@
-import express, { Request, Response, NextFunction as next } from 'express';
+import express from 'express';
 import cors from 'cors';
-import createError from 'http-errors';
-import MongoConnection from './db/connect';
+import Connections from './db/connect';
 import { EXPRESS } from "./configs/constants/configs";
 import logging from './configs/log/logs';
 import testRoute from "./controllers/status";
-import loginRoutes from "./routes/login.routes";
+import Routes from "./routes/routes";
+import { PG_CLIENT } from './configs/constants/configs';
 
 // Initalize the server
 const app = express();
@@ -43,12 +43,12 @@ app.use((req, res, next) => {
 
 // Test server route
 app.use(version, testRoute);
-app.use(version, loginRoutes);
+app.use(version, Routes);
 
 // Try to connect to MongoDB
-MongoConnection().then(() =>{
+Connections().then(() =>{
     app.listen(EXPRESS.port, () => {
-        console.info("Connection established");
+        console.info("Connections established");
         console.log('Server listening on port ' + EXPRESS.port);
     })
 }).catch(error => console.error(error));
