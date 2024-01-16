@@ -19,7 +19,7 @@ export const login = async (req: Request, res: Response) => {
 
     const token = createToke(createTokenData(req.user));
 
-    return res.status(200).json({email: req.user.email, phone: req.user.phone, name: req.user.name, lastName: req.user.lastName, token: token});
+    return res.status(200).json({status: "success", email: req.user.email, phone: req.user.phone, name: req.user.name, lastName: req.user.lastName, token: token});
 };
 
 export const signIn = async (req: Request, res: Response) => {
@@ -42,7 +42,7 @@ export const getMSISDN = async (req: Request, res: Response) => {
     if (MSISDN.length == 0)
         return res.status(400).json({status: "Error", type: "No MSISDN available", message: "No se encontraron MSISDN disponibles"});
 
-    return res.status(200).json({status: "success", number: MSISDN[0]})
+    return res.status(200).json({status: "success", msisdnData: MSISDN[0]})
 };
 
 export const pre_activate = async (req: Request, res: Response) => {
@@ -56,21 +56,13 @@ export const pre_activate = async (req: Request, res: Response) => {
         let retData = {};
         let route = `${altanURL}/cm${isSandbox ? sandbox : ""}/v1/subscribers/${msisdn}/preregistered`;
 
-        let actualDate = getDate();
-        let expireEffectiveDate = getDate(new Date);
-
         let body = JSON.stringify({
             "offeringId": offeringId,
-            "startEffectiveDate": actualDate,
-            "expireEffectiveDate": expireEffectiveDate,
-            "scheduleDate": actualDate,
             "idPoS": ""
         });
 
         while (!done) {
             let token = await getAltanToken(tokenError);
-
-            console.log(token, route);
 
             Header.append("Authorization", `Bearer ${token}`);
             Header.append("Content-Type", "application/json");
@@ -85,6 +77,8 @@ export const pre_activate = async (req: Request, res: Response) => {
             retData = response;
             done = true;
         }
+
+        await updateElement(`UPDATE viral_numbers SET is_saled = true WHERE msisdn = '${msisdn}'`);
 
         return res.status(200).json({status: "success", data: retData});
 
@@ -105,6 +99,10 @@ export const portHandler = async (req: Request, res: Response) => {
 };
 
 /* -------------------------------------------------------------------------- */
+
+const updateElement = async (query: string) => {
+    await PG_CLIENT.query(query);
+};
 
 const getAltanToken =  (tokenError: boolean) => {
     return new Promise( async (resolve, reject) => {
@@ -130,10 +128,6 @@ const getAltanToken =  (tokenError: boolean) => {
         }
     })
 };
-
-const updateUser = async (userEmail: string, data: any) => {
-    await userModel.findOneAndUpdate({email: userEmail}, data, {new: true});
-}
 
 const createUser = async (body: any): Promise<IUser> => {
     let user: IUser = new userModel();

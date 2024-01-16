@@ -7,7 +7,7 @@ routes.post("/login", validateLoginData, login)
     .post("/signin", validateUserData, signIn)
     .post("/port", validateToken, portHandler)
     .post("/pre_activate/:msisdn", validateToken, pre_activate)
-    .get("/msisdn", validateToken, getMSISDN)
+    .post("/msisdn", validateToken, getMSISDN)
     .get("/msisdn_count", validateToken, isMSISDNAvailable)
     .post('/test_req', (req, res) => {
         console.log(req.body)
