@@ -37,7 +37,9 @@ export const signIn = async (req: Request, res: Response) => {
 };
 
 export const getMSISDN = async (req: Request, res: Response) => {
-    const MSISDN = (await PG_CLIENT.query("SELECT * FROM viral_numbers WHERE is_saled = false limit 1")).rows;
+    const esim = req.params.esim == "true" ? true : false;
+
+    const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false limit 1`)).rows;
 
     if (MSISDN.length == 0)
         return res.status(400).json({status: "Error", type: "No MSISDN available", message: "No se encontraron MSISDN disponibles"});
@@ -46,6 +48,7 @@ export const getMSISDN = async (req: Request, res: Response) => {
 };
 
 export const pre_activate = async (req: Request, res: Response) => {
+    const esim = req.params.esim == "true" ? true : false;
     const { msisdn } = req.params;
     const { offeringId } = req.body;
 
@@ -78,24 +81,64 @@ export const pre_activate = async (req: Request, res: Response) => {
             done = true;
         }
 
-        await updateElement(`UPDATE viral_numbers SET is_saled = true WHERE msisdn = '${msisdn}'`);
+        await updateElement(`UPDATE ${esim ? 'viral_esim' : 'viral_numbers'} SET is_saled = true WHERE msisdn = '${msisdn}'`);
 
         return res.status(200).json({status: "success", data: retData});
 
     } catch (err) {
+        console.error(err);
         return res.status(501).json({status: "error", message: err});
     }
 
 };
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
-    const MSISDNCount = (await PG_CLIENT.query("SELECT COUNT(*) FROM viral_numbers WHERE is_saled = false")).rows;
+    const esim = req.params.esim == "true" ? true : false;
+
+    const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
 };
 
 export const portHandler = async (req: Request, res: Response) => {
     console.log(req.user)
+};
+
+export const imeiData = async (req: Request, res: Response) => {
+    const { imei } = req.params;
+
+    if (!imei)
+        return res.status(400).json({status: 'error', message: 'No imei provided'})
+    
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {};
+    let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/imeis/${imei}/status`;
+
+    try {
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+    
+            Header.append("Authorization", `Bearer ${token}`);
+    
+            const response = await fetch(route, { method: 'GET', headers: Header }).then((r) => r.json());
+    
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+    
+            retData = response;
+            done = true;
+        }
+    
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: "error", message: err});
+    }
 };
 
 /* -------------------------------------------------------------------------- */
