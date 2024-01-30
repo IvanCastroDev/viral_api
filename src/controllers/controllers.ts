@@ -38,7 +38,6 @@ export const signIn = async (req: Request, res: Response) => {
 
 export const getMSISDN = async (req: Request, res: Response) => {
     const esim = req.params.esim == "true" ? true : false;
-
     const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false limit 1`)).rows;
 
     if (MSISDN.length == 0)
@@ -94,7 +93,6 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
     const esim = req.params.esim == "true" ? true : false;
-
     const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
@@ -114,7 +112,7 @@ export const imeiData = async (req: Request, res: Response) => {
     let tokenError = false;
     let Header = new Headers();
     let retData = {};
-    let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/imeis/${imei}/status`;
+    let route = `${altanURL}/ac/v1/imeis/${imei}/status`;
 
     try {
         while (!done) {
