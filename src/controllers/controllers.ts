@@ -37,7 +37,8 @@ export const signIn = async (req: Request, res: Response) => {
 };
 
 export const getMSISDN = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "true" ? true : false;
+    const esim = req.params.esim == "True" ? true : false;
+    console.log(esim)
     const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false limit 1`)).rows;
 
     if (MSISDN.length == 0)
@@ -47,7 +48,7 @@ export const getMSISDN = async (req: Request, res: Response) => {
 };
 
 export const pre_activate = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "true" ? true : false;
+    const esim = req.params.esim == "True" ? true : false;
     const { msisdn } = req.params;
     const { offeringId } = req.body;
 
@@ -92,7 +93,8 @@ export const pre_activate = async (req: Request, res: Response) => {
 };
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "true" ? true : false;
+    const esim = req.params.esim == "True" ? true : false;
+    console.log(esim)
     const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
