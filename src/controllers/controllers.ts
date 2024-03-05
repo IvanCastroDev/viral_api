@@ -94,7 +94,6 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
     const esim = req.params.esim == "True" ? true : false;
-    console.log(esim)
     const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
@@ -133,6 +132,56 @@ export const imeiData = async (req: Request, res: Response) => {
             done = true;
         }
     
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: "error", message: err});
+    }
+};
+
+export const purchase_plan = async (req: Request, res: Response) => {
+    const { offer_id, msisdn } = req.params
+
+    if (!offer_id || !msisdn)
+        return res.status(400).json({status: 'error', message: 'No offertId or msisdn provided'})
+
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {};
+    let route = `${altanURL}/cm${isSandbox? sandbox : ""}/v1/products/purchase`;
+
+    try {
+        let body = JSON.stringify({
+            offerings: [
+                offer_id
+            ],
+            msisdn: msisdn,
+            scheduleDate: '',
+            expireEffectiveDate: ''
+        })
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+            
+            const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"] === "The request sent is incorrect")
+                return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+
+            retData = response;
+            done = true;
+        }
+
         return res.status(200).json({status: "success", data: retData});
 
     } catch (err) {

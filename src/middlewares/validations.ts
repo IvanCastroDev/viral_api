@@ -45,7 +45,7 @@ export const validateToken = async (req: Request, res: Response, next: NextFunct
     
     try {
         if (segment.length != 3)
-            throw Error();
+            throw Error("Invalid authorization");
 
         let payload: any = jwt.verify(token, hashConfigs.HASH_STRING);
 
