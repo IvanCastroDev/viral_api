@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { login, signIn, portHandler, getMSISDN, isMSISDNAvailable, pre_activate, imeiData, purchase_plan } from "../controllers/controllers";
+import { login, signIn, portHandler, getMSISDN, isMSISDNAvailable, pre_activate, imeiData, purchase_plan, getOperator } from "../controllers/controllers";
 import { validateUserData, validateLoginData, validateToken } from "../middlewares/validations";
 import { uploadImage, uploadImages } from "../middlewares/multer";
 import multer from 'multer';
@@ -28,8 +28,9 @@ routes.post("/login", validateLoginData, login)
     .post("/msisdn/:esim", validateToken, getMSISDN)
     .get("/msisdn_count/:esim", validateToken, isMSISDNAvailable)
     
-    /* Rutas para obtener informacion del equipo con base al IMEI */
+    /* Rutas para obtener informacion del equipo con base al IMEI o MSISDN*/
     .get("/imeiData/:imei", imeiData)
+    .get("/msisdn/:msisdn", getOperator)
 
     /* Rutas para guardar imagenes para activacion de ESIM con Qr */
     .post('/qrupload', upload.single('file'), uploadImage)
