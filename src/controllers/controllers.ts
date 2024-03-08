@@ -78,6 +78,9 @@ export const pre_activate = async (req: Request, res: Response) => {
                 continue;
             }
 
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
             retData = response;
             done = true;
         }
@@ -128,7 +131,10 @@ export const imeiData = async (req: Request, res: Response) => {
                 tokenError = true;
                 continue;
             }
-    
+
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
             retData = response;
             done = true;
         }
@@ -176,6 +182,9 @@ export const getOperator = async (req: Request, res: Response) => {
 
             if (response["description"] === "The request sent is incorrect")
                 return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+            
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
 
             retData = response;
             done = true;
@@ -229,6 +238,9 @@ export const purchase_plan = async (req: Request, res: Response) => {
 
             if (response["description"] === "The request sent is incorrect")
                 return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
 
             retData = response;
             done = true;
