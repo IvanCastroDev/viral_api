@@ -10,6 +10,7 @@ const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
 const isSandbox = true;
 let token = "";
+let viralIda = '061';
 
 export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
@@ -77,6 +78,9 @@ export const pre_activate = async (req: Request, res: Response) => {
                 continue;
             }
 
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
             retData = response;
             done = true;
         }
@@ -94,7 +98,6 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
     const esim = req.params.esim == "True" ? true : false;
-    console.log(esim)
     const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
@@ -128,11 +131,121 @@ export const imeiData = async (req: Request, res: Response) => {
                 tokenError = true;
                 continue;
             }
-    
+
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
             retData = response;
             done = true;
         }
     
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: "error", message: err});
+    }
+};
+
+interface operatorRespons  {
+    [key: string]: string;
+    msisdn: string;
+    cr: string;
+    ida: string;
+    type: string;
+}
+
+export const getOperator = async (req: Request, res: Response) => {
+    const { msisdn } = req.params;
+
+    if (!msisdn)
+        return res.status(400).json({status: "error", message:'Invalid msisdn'});
+
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {} as operatorRespons;
+    let route = `${altanURL}/cm/v1/subscribers/lookupForOperator?msisdn=${msisdn}`;
+
+    try {
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            
+            const response = await fetch(route, { method: 'GET', headers: Header }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"] === "The request sent is incorrect")
+                return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+            
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
+            retData = response;
+            done = true;
+        }
+
+        if(retData['ida'] === viralIda)
+            return res.status(200).json({status: 'success', message: 'Valid MSISDN'});
+
+        return res.status(200).json({status: "error", data: 'Invalid MSISDN'});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: "error", message: err});
+    }
+}
+
+export const purchase_plan = async (req: Request, res: Response) => {
+    const { offer_id, msisdn } = req.params
+
+    if (!offer_id || !msisdn)
+        return res.status(400).json({status: 'error', message: 'No offertId or msisdn provided'})
+
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {};
+    let route = `${altanURL}/cm${isSandbox? sandbox : ""}/v1/products/purchase`;
+
+    try {
+        let body = JSON.stringify({
+            offerings: [
+                offer_id
+            ],
+            msisdn: msisdn,
+            scheduleDate: '',
+            expireEffectiveDate: ''
+        })
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+            
+            const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"] === "The request sent is incorrect")
+                return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
+            retData = response;
+            done = true;
+        }
+
         return res.status(200).json({status: "success", data: retData});
 
     } catch (err) {
