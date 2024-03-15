@@ -265,7 +265,7 @@ export const get_msisdn_profile = async (req: Request, res: Response) => {
     let tokenError = false;
     let Header = new Headers();
     let retData = {} as msisdnProfile;
-    let route = `${altanURL}/cm${isSandbox? sandbox : ""}/v1/subscribers/${msisdn}/profile`;
+    let route = `${altanURL}/cm/v1/subscribers/${msisdn}/profile`;
 
     try {
         while (!done) {
