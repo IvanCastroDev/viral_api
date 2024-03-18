@@ -5,6 +5,7 @@ import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { PG_CLIENT } from "../configs/constants/configs";
+import { msisdnProfile } from "../interfaces/altan.interfaces";
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
@@ -252,6 +253,50 @@ export const purchase_plan = async (req: Request, res: Response) => {
         console.error(err);
         return res.status(500).json({status: "error", message: err});
     }
+};
+
+export const get_msisdn_profile = async (req: Request, res: Response) => {
+    const { msisdn } = req.params;
+
+    if (!msisdn)
+        return res.status(400).json({status: 'error', message: 'No msisdn provided'});
+
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {} as msisdnProfile;
+    let route = `${altanURL}/cm/v1/subscribers/${msisdn}/profile`;
+
+    try {
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+
+            const response = await fetch(route, { method: 'GET', headers: Header }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+            
+            if (response["description"] === "The request sent is incorrect")
+                return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+
+            if (response["description"])
+                return res.status(400).json({status: 'error', message: response["description"]})
+
+            retData = response['responseSubscriber'];
+            done = true;
+        }
+
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: 'error', message: err})
+    }
+
 };
 
 /* -------------------------------------------------------------------------- */
