@@ -1,1 +1,1 @@
-export const isSandbox = false;
+export const isSandbox = true;
