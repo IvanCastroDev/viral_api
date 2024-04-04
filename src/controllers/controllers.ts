@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { PG_CLIENT } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
-import { isSandbox } from "../configs/constants/altan";
+import { isSandbox } from "../configs/constants/configs";
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";

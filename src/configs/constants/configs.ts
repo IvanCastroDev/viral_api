@@ -68,3 +68,5 @@ const hashString = process.env.HASH_STRING || "myhash";
 export const hashConfigs = {
     HASH_STRING: hashString
 };
+
+export const isSandbox = process.env.ALTAN_SANDBOX || true;
