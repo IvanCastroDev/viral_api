@@ -8,7 +8,8 @@ import { login,
   imeiData, 
   purchase_plan, 
   getOperator, 
-  get_msisdn_profile 
+  get_msisdn_profile,
+  altan_rute_type
 } from "../controllers/controllers";
 import { validateUserData, validateLoginData, validateToken } from "../middlewares/validations";
 import { uploadImage, uploadImages } from "../middlewares/multer";
@@ -53,5 +54,6 @@ routes.post("/login", validateLoginData, login)
         console.log(req.body)
         return res.status(200).json({pass: true})
     })
+    .get('/altan_connection', altan_rute_type)
 
 export default routes;

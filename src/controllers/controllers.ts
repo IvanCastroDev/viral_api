@@ -297,7 +297,10 @@ export const get_msisdn_profile = async (req: Request, res: Response) => {
         console.error(err);
         return res.status(500).json({status: 'error', message: err})
     }
+};
 
+export const altan_rute_type = (req: Request, res: Response) => {
+    return res.status(200).send(`connection type: ${isSandbox? sandbox : "prod"}`)
 };
 
 /* -------------------------------------------------------------------------- */
