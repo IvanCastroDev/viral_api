@@ -9,7 +9,7 @@ import { msisdnProfile } from "../interfaces/altan.interfaces";
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
-const isSandbox = false;
+const isSandbox = true;
 let token = "";
 let viralIda = '061';
 
