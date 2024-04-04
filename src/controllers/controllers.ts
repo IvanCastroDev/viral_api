@@ -40,9 +40,11 @@ export const signIn = async (req: Request, res: Response) => {
 };
 
 export const getMSISDN = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "True" ? true : false;
-    console.log(esim)
-    const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false limit 1`)).rows;
+    const esim = req.params.esim === "True";
+    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
+    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
+    
+    const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${tableName} WHERE is_saled = false limit 1`)).rows;
 
     if (MSISDN.length == 0)
         return res.status(400).json({status: "Error", type: "No MSISDN available", message: "No se encontraron MSISDN disponibles"});
@@ -51,7 +53,10 @@ export const getMSISDN = async (req: Request, res: Response) => {
 };
 
 export const pre_activate = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "True" ? true : false;
+    const esim = req.params.esim === "True";
+    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
+    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
+
     const { msisdn } = req.params;
     const { offeringId } = req.body;
 
@@ -87,7 +92,7 @@ export const pre_activate = async (req: Request, res: Response) => {
             done = true;
         }
 
-        await updateElement(`UPDATE ${esim ? 'viral_esim' : 'viral_numbers'} SET is_saled = true WHERE msisdn = '${msisdn}'`);
+        await updateElement(`UPDATE ${tableName} SET is_saled = true WHERE msisdn = '${msisdn}'`);
 
         return res.status(200).json({status: "success", data: retData});
 
@@ -99,8 +104,11 @@ export const pre_activate = async (req: Request, res: Response) => {
 };
 
 export const isMSISDNAvailable = async (req: Request, res: Response) => {
-    const esim = req.params.esim == "True" ? true : false;
-    const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${esim ? 'viral_esim' : 'viral_numbers'} WHERE is_saled = false`)).rows;
+    const esim = req.params.esim === "True";
+    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
+    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
+    
+    const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${tableName} WHERE is_saled = false`)).rows;
     
     return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
 };
