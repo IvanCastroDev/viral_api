@@ -246,12 +246,15 @@ export const purchase_plan = async (req: Request, res: Response) => {
                 continue;
             }
 
-            if (response["description"] === "The request sent is incorrect")
+            if (response["description"] === "The request sent is incorrect") {
+                console.log(response)
                 return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
-
-            if (response["description"])
+            }
+            if (response["description"]) {
+                console.log(response)
                 return res.status(400).json({status: 'error', message: response["description"]})
-
+            }
+            
             retData = response;
             done = true;
         }
