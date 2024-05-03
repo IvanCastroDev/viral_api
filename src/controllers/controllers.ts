@@ -1,12 +1,13 @@
 import IUser from "../interfaces/user.interface";
 import userModel from "../models/user.model";
-import { Request, Response } from "express";
+import { Request, Response, response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { PG_CLIENT } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
 import { isSandbox } from "../configs/constants/configs";
+import { altanConfigs } from "../configs/constants/configs";
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
@@ -91,8 +92,6 @@ export const pre_activate = async (req: Request, res: Response) => {
             retData = response;
             done = true;
         }
-
-        await updateElement(`UPDATE ${tableName} SET is_saled = true WHERE msisdn = '${msisdn}'`);
 
         return res.status(200).json({status: "success", data: retData});
 
@@ -310,6 +309,60 @@ export const get_msisdn_profile = async (req: Request, res: Response) => {
     }
 };
 
+export const change_viral_plan = async (req: Request, res: Response) => {
+    const { msisdn } = req.params;
+    const { offer_id } = req.params;
+    
+    if (!msisdn ||!offer_id)
+        return res.status(400).json({status: 'error', message: 'No msisdn or offer_id provided'});
+
+    let done = false;
+    let tokenError = false;
+    let Header = new Headers();
+    let retData = {};
+    let route = `${altanURL}/cm${isSandbox? sandbox : ""}/v1/subscribers/${msisdn}`;
+    
+    try {
+        let body = JSON.stringify({
+            primaryOffering: {
+                offeringId: offer_id
+            }
+        })
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+            
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+            
+            const response = await fetch(route, { method: 'PATCH', headers: Header, body: body}).then(r => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"] === "The request sent is incorrect") {
+                console.log(response);
+                return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
+            }
+
+            if (response["description"]) {
+                console.log(response);
+                return res.status(400).json({status: 'error', message: response["description"]})
+            }
+            retData = response;
+            done = true;
+        }
+
+        return res.status(200).json({status: "success", data: retData});
+
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: 'error', message: err})
+    }
+}
+
 export const altan_rute_type = (req: Request, res: Response) => {
     return res.status(200).send(`connection type: ${isSandbox? sandbox : "prod"}`)
 };
@@ -327,7 +380,7 @@ const getAltanToken =  (tokenError: boolean) => {
             resolve(token)
 
         var myHeaders = new Headers();
-        myHeaders.append("Authorization", "Basic d0NHYWlNTXJBRDdMTkR5d0owTDhkTGxjZnJQRzVJWmE6RHg1WWFubzdMQVhpdzFUYw==");
+        myHeaders.append("Authorization", `Basic ${altanConfigs.ALTAN_ADMIN_TOKEN}`);
         
         try {
             const response = await fetch(`${altanURL}/v1/oauth/accesstoken?grant-type=client_credentials`, {

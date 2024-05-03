@@ -69,6 +69,12 @@ export const hashConfigs = {
     HASH_STRING: hashString
 };
 
+// Altan coonfiguration and security data
 const ALTAN_SANDBOX = (process.env.ALTAN_SANDBOX === 'true');
+const ALTAN_ADMIN_TOKEN = process.env.ALTAN_ADMIN_TOKEN;
+
+export const altanConfigs = {
+    ALTAN_ADMIN_TOKEN: ALTAN_ADMIN_TOKEN
+};
 
 export const isSandbox = ALTAN_SANDBOX;

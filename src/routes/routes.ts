@@ -9,7 +9,8 @@ import { login,
   purchase_plan, 
   getOperator, 
   get_msisdn_profile,
-  altan_rute_type
+  altan_rute_type,
+  change_viral_plan
 } from "../controllers/controllers";
 import { validateUserData, validateLoginData, validateToken } from "../middlewares/validations";
 import { uploadImage, uploadImages } from "../middlewares/multer";
@@ -50,6 +51,9 @@ routes.post("/login", validateLoginData, login)
 
     /*Rutas para recargas */
     .post('/purchase_plan/:offer_id/:msisdn', validateToken, purchase_plan)
+    .post('/change_plan/:offer_id/:msisdn', validateToken, change_viral_plan)
+
+    /* Rutas de pruebas y validacion de conexiones */
     .post('/test_req', (req, res) => {
         console.log(req.body)
         return res.status(200).json({pass: true})
