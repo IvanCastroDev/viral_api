@@ -1,16 +1,15 @@
 import { Router } from "express";
 import { login, 
   signIn, 
-  portHandler, 
-  getMSISDN, 
-  isMSISDNAvailable, 
+  portHandler,
   pre_activate, 
   imeiData, 
   purchase_plan, 
   getOperator, 
   get_msisdn_profile,
   altan_rute_type,
-  change_viral_plan
+  change_viral_plan,
+  deleteAction
 } from "../controllers/controllers";
 import { validateUserData, validateLoginData, validateToken } from "../middlewares/validations";
 import { uploadImage, uploadImages } from "../middlewares/multer";
@@ -37,8 +36,6 @@ routes.post("/login", validateLoginData, login)
 
     /* Rutas para la venta de lineas nuevas y preactivacion */
     .post("/pre_activate/:msisdn/:esim", validateToken, pre_activate)
-    .post("/msisdn/:esim", validateToken, getMSISDN)
-    .get("/msisdn_count/:esim", validateToken, isMSISDNAvailable)
     
     /* Rutas para obtener informacion del equipo con base al IMEI o MSISDN*/
     .get("/imeiData/:imei", imeiData)
@@ -52,6 +49,9 @@ routes.post("/login", validateLoginData, login)
     /*Rutas para recargas */
     .post('/purchase_plan/:offer_id/:msisdn', validateToken, purchase_plan)
     .post('/change_plan/:offer_id/:msisdn', validateToken, change_viral_plan)
+
+    /*Rutas para eliminar acciones dentro del cache*/
+    .delete('/action/:msisdn', validateToken, deleteAction)
 
     /* Rutas de pruebas y validacion de conexiones */
     .post('/test_req', (req, res) => {

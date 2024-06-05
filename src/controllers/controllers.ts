@@ -4,16 +4,36 @@ import { Request, Response, response } from "express";
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
-import { PG_CLIENT } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
 import { isSandbox } from "../configs/constants/configs";
-import { altanConfigs } from "../configs/constants/configs";
+import { altanConfigs, numlexConfigs } from "../configs/constants/configs";
+import { Builder } from 'xml2js';
+import { randomInt } from "crypto";
+import NodeCache from "node-cache";
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
 
 let token = "";
 let viralIda = '061';
+
+const xmlBuilder = new Builder({
+    xmldec: { version: '1.0', encoding: 'UTF-8' },
+    renderOpts: { 'pretty': true, 'indent': '    ', 'newline': '\n' },
+    headless: false
+});
+
+interface Action {
+    [key: string]: any;
+    action: string,
+    msisdn: string,
+    offer_id: string,
+    response: Record<string, any>,
+    status: 'success',
+    date: string
+}
+
+let actionsCache =  new NodeCache({stdTTL: 86400, checkperiod: 3600});
 
 export const login = async (req: Request, res: Response) => {
     const { password } = req.body;
@@ -40,26 +60,12 @@ export const signIn = async (req: Request, res: Response) => {
     }
 };
 
-export const getMSISDN = async (req: Request, res: Response) => {
-    const esim = req.params.esim === "True";
-    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
-    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
-    
-    const MSISDN = (await PG_CLIENT.query(`SELECT * FROM ${tableName} WHERE is_saled = false limit 1`)).rows;
-
-    if (MSISDN.length == 0)
-        return res.status(400).json({status: "Error", type: "No MSISDN available", message: "No se encontraron MSISDN disponibles"});
-
-    return res.status(200).json({status: "success", msisdnData: MSISDN[0]})
-};
-
 export const pre_activate = async (req: Request, res: Response) => {
-    const esim = req.params.esim === "True";
-    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
-    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
-
     const { msisdn } = req.params;
     const { offeringId } = req.body;
+
+    if (!validateAction(msisdn, offeringId))
+        return res.status(400).json({status: "error", message: 'MSISDN already actived'});
 
     try {
         let tokenError = false;
@@ -82,16 +88,21 @@ export const pre_activate = async (req: Request, res: Response) => {
             const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
 
             if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                console.log(response)
                 tokenError = true;
                 continue;
             }
 
-            if (response["description"])
+            if (response["description"]) {
+                console.log(response)
                 return res.status(400).json({status: 'error', message: response["description"]})
+            }
 
             retData = response;
             done = true;
         }
+
+        createAction('pre_activation', msisdn, offeringId, retData);
 
         return res.status(200).json({status: "success", data: retData});
 
@@ -102,18 +113,13 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 };
 
-export const isMSISDNAvailable = async (req: Request, res: Response) => {
-    const esim = req.params.esim === "True";
-    const tableNamePrefix = esim ? "viral_esim" : "viral_numbers";
-    const tableName = `${tableNamePrefix}${isSandbox ? "_test" : ""}`;
-    
-    const MSISDNCount = (await PG_CLIENT.query(`SELECT COUNT(*) FROM ${tableName} WHERE is_saled = false`)).rows;
-    
-    return res.status(200).json({status: "success", number: MSISDNCount[0]["count"]})
-};
-
 export const portHandler = async (req: Request, res: Response) => {
-    console.log(req.user)
+    console.log(req.body)
+
+    const portJson = getPortObject(req);
+    const portRequestMessage = JsonToXml(portJson);
+
+    return res.status(200).send(portRequestMessage)
 };
 
 export const imeiData = async (req: Request, res: Response) => {
@@ -183,6 +189,7 @@ export const getOperator = async (req: Request, res: Response) => {
             Header.append("Authorization", `Bearer ${token}`);
             
             const response = await fetch(route, { method: 'GET', headers: Header }).then((r) => r.json());
+            console.log(response)
 
             if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
                 tokenError = true;
@@ -191,7 +198,7 @@ export const getOperator = async (req: Request, res: Response) => {
 
             if (response["description"] === "The request sent is incorrect")
                 return res.status(400).json({status: 'error', message: 'Some parameters are incorrect'})
-            
+
             if (response["description"])
                 return res.status(400).json({status: 'error', message: response["description"]})
 
@@ -215,6 +222,9 @@ export const purchase_plan = async (req: Request, res: Response) => {
 
     if (!offer_id || !msisdn)
         return res.status(400).json({status: 'error', message: 'No offertId or msisdn provided'})
+
+    if (!validateAction(msisdn, offer_id))
+        return res.status(400).json({status: 'error', message: 'Already have this offer'}) 
 
     let done = false;
     let tokenError = false;
@@ -257,6 +267,8 @@ export const purchase_plan = async (req: Request, res: Response) => {
             retData = response;
             done = true;
         }
+
+        createAction('purchase_plan',msisdn,offer_id,retData);
 
         return res.status(200).json({status: "success", data: retData});
 
@@ -316,6 +328,9 @@ export const change_viral_plan = async (req: Request, res: Response) => {
     if (!msisdn ||!offer_id)
         return res.status(400).json({status: 'error', message: 'No msisdn or offer_id provided'});
 
+    if (!validateAction(msisdn, offer_id))
+        return res.status(400).json({status: 'error', message: 'Already have this offer'})
+
     let done = false;
     let tokenError = false;
     let Header = new Headers();
@@ -355,6 +370,8 @@ export const change_viral_plan = async (req: Request, res: Response) => {
             done = true;
         }
 
+        createAction('change_plan', msisdn, offer_id, retData)
+
         return res.status(200).json({status: "success", data: retData});
 
     } catch (err) {
@@ -363,14 +380,78 @@ export const change_viral_plan = async (req: Request, res: Response) => {
     }
 }
 
+export const deleteAction = (req: Request, res: Response) => {
+    const msisdn = req.params.msisdn;
+
+    try {
+        actionsCache.del(msisdn);
+    } catch (err) {
+        console.error(err);
+        return res.status(500).json({status: 'error', message: err})
+    }
+
+    return res.status(200).json({status: "success", message: "Action deleted"});
+};
+
 export const altan_rute_type = (req: Request, res: Response) => {
     return res.status(200).send(`connection type: ${isSandbox? sandbox : "prod"}`)
 };
 
 /* -------------------------------------------------------------------------- */
 
-const updateElement = async (query: string) => {
-    await PG_CLIENT.query(query);
+const getPortObject = (req: Request): Object => {
+    const userTimestamp = getFormattedTimestamp();
+
+    const Timestamp = getFormattedTimestamp();
+    const randomized = randomInt(10000,99999)
+
+    return {
+        "soapenv:Body": {
+            "por:processNPCMsg": {
+                "por:userId": `${numlexConfigs.NUMLEX_USER}`,
+                "por:password": `${numlexConfigs.NUMLEX_PASS}`,
+                "por:xmlMsg": {
+                    "NPCData": {
+                        "MessageHeader": {
+                            "TransTimestamp": `${Timestamp}`,
+                            "Sender": `${numlexConfigs.VIRAL_IDA}`,
+                            "NumOfMessages": "1"
+                        },
+                        "NPCMessage": {
+                            "$": {
+                                "MessageID": "1001"
+                            },
+                            "PortRequest": {
+                                "PortType": "6",
+                                "SubscriberType": "0",
+                                "RecoveryFlagType": "N",
+                                "PortID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
+                                "FolioID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
+                                "Timestamp": `${Timestamp}`,
+                                "SubsReqTime": `${userTimestamp}`,
+                                "RIDA": `${numlexConfigs.VIRAL_IDA}`,
+                                "RCR": `${numlexConfigs.ALTAN_CR}`,
+                                "TotalPhoneNums": "1",
+                                "Numbers": {
+                                    "NumberRange": {
+                                        "NumberFrom": `${req.body.numeroPortar}`,
+                                        "NumberTo": `${req.body.numeroPortar}`
+                                    }
+                                },
+                                "Pin": `${req.body.nip}`,
+                                "Comments": "",
+                                "NumOfFiles": "0"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+const JsonToXml = (data:Object): string => {
+    return xmlBuilder.buildObject(data);
 };
 
 const getAltanToken =  (tokenError: boolean) => {
@@ -434,21 +515,35 @@ const handleError = async (error: any, res: Response): Promise<Response> => {
     } 
 }
 
-function getDate(actualDate?: Date) {
-    if (actualDate) {
-        let fecha = new Date(actualDate);
-        fecha.setMonth(fecha.getMonth() + 1);
-        return formatDate(fecha)
+const validateAction = (msisdn: string, offer_id: string) => {
+    const action = actionsCache.get(msisdn) as Action;
+    const today = new Date().toDateString();
+
+    if (action && action.date === today && action.offer_id === offer_id) {
+        return false;
     }
 
-    let fecha = new Date();
-
-    return formatDate(fecha);
+    return true;
 }
 
-const formatDate = (fecha: Date) => {
-    var year = fecha.getFullYear();
-    var month = (fecha.getMonth() + 1).toString().padStart(2, '0');
-    var day = fecha.getDate().toString().padStart(2, '0');
-    return year + month + day;
+const createAction = (action: string, msisdn:  string, offer_id: string, retData: Object ) => {
+    actionsCache.set(msisdn, {
+        action: action,
+        msisdn: msisdn,
+        offer_id: offer_id,
+        response: retData,
+        status: 'success',
+        date: new Date().toDateString()
+    });
+};
+
+function getFormattedTimestamp() {
+    let now = new Date();
+    let year = now.getFullYear().toString().slice(2);
+    let month = (now.getMonth() + 1).toString().padStart(2, '0');
+    let day = now.getDate().toString().padStart(2, '0');
+    let hour = now.getHours().toString().padStart(2, '0');
+    let minute = now.getMinutes().toString().padStart(2, '0');
+
+    return year + month + day + hour + minute;
 }
