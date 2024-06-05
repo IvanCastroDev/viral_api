@@ -5,7 +5,7 @@ import { EXPRESS } from "./configs/constants/configs";
 import logging from './configs/log/logs';
 import testRoute from "./controllers/status";
 import Routes from "./routes/routes";
-import { PG_CLIENT } from './configs/constants/configs';
+import bodyParser from 'body-parser';
 
 // Initalize the server
 const app = express();
@@ -18,6 +18,7 @@ app.use(cors({
 }));
 app.use(express.urlencoded({extended: true})); 
 app.use(express.json());
+app.use(bodyParser.json());
 
 // Loggs
 app.use((req, res, next) => {
@@ -35,11 +36,6 @@ app.use((req, res, next) => {
   
     next();
   });
-
-// Handle on fordwards requests
-/* app.use((req: Request, res: Response, next: next) => {
-    next(createError(404));
-}); */
 
 // Test server route
 app.use(version, testRoute);

@@ -2,7 +2,6 @@ import { ConnectOptions } from "mongoose";
 import MongoConnectionOptions from "../../interfaces/mongo.interfaces";
 import expressConfigs from "../../interfaces/express.interfaces";
 import * as dotenv from 'dotenv';
-import { Client } from "pg";
 
 dotenv.config()
 
@@ -39,15 +38,6 @@ export const PG_OPTIONS = {
     host: PG_HOST
 }
 
-export const PG_CLIENT = new Client({
-    user: PG_OPTIONS.user,
-    password: PG_OPTIONS.password,
-    host: PG_OPTIONS.host,
-    port: PG_OPTIONS.port,
-    database: PG_OPTIONS.db
-    
-});
-
 export const requestErrorMessages = {
     EMAIL_IN_USE: "El email indicado ya se encuentra en uso.",
     EMAIL_NOT_IN_REQUEST: "No email provided",
@@ -69,7 +59,7 @@ export const hashConfigs = {
     HASH_STRING: hashString
 };
 
-// Altan coonfiguration and security data
+// Altan configuration and security data
 const ALTAN_SANDBOX = (process.env.ALTAN_SANDBOX === 'true');
 const ALTAN_ADMIN_TOKEN = process.env.ALTAN_ADMIN_TOKEN;
 
@@ -78,3 +68,16 @@ export const altanConfigs = {
 };
 
 export const isSandbox = ALTAN_SANDBOX;
+
+// Numlex variables
+const NUMLEX_USER = process.env.NUMLEX_USER;
+const NUMLEX_PASS = process.env.NUMLEX_PASS;
+const VIRAL_IDA = process.env.VIRAL_IDA;
+const ALTAN_CR = process.env.ALTAN_CR;
+
+export const numlexConfigs = {
+    NUMLEX_USER: NUMLEX_USER,
+    NUMLEX_PASS:  NUMLEX_PASS,
+    VIRAL_IDA: VIRAL_IDA,
+    ALTAN_CR: ALTAN_CR
+};
