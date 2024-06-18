@@ -70,12 +70,14 @@ export const altanConfigs = {
 export const isSandbox = ALTAN_SANDBOX;
 
 // Numlex variables
+const NUMLEX_MSG_ROUTE = process.env.NUMLEX_MSG_ROUTE || '';
 const NUMLEX_USER = process.env.NUMLEX_USER;
 const NUMLEX_PASS = process.env.NUMLEX_PASS;
 const VIRAL_IDA = process.env.VIRAL_IDA;
 const ALTAN_CR = process.env.ALTAN_CR;
 
 export const numlexConfigs = {
+    MSG_ROUTE: NUMLEX_MSG_ROUTE,
     NUMLEX_USER: NUMLEX_USER,
     NUMLEX_PASS:  NUMLEX_PASS,
     VIRAL_IDA: VIRAL_IDA,

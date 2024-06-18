@@ -9,7 +9,8 @@ import { login,
   get_msisdn_profile,
   altan_rute_type,
   change_viral_plan,
-  deleteAction
+  deleteAction,
+  numblexMessageHandler
 } from "../controllers/controllers";
 import { validateUserData, validateLoginData, validateToken } from "../middlewares/validations";
 import { uploadImage, uploadImages } from "../middlewares/multer";
@@ -33,6 +34,7 @@ routes.post("/login", validateLoginData, login)
 
     /*Rutas para realizar portabilidad */
     .post("/port", validateToken, portHandler)
+    .post("/soap_api", numblexMessageHandler)
 
     /* Rutas para la venta de lineas nuevas y preactivacion */
     .post("/pre_activate/:msisdn/:esim", validateToken, pre_activate)

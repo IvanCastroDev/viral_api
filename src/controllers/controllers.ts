@@ -7,7 +7,7 @@ import { hashConfigs } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
 import { isSandbox } from "../configs/constants/configs";
 import { altanConfigs, numlexConfigs } from "../configs/constants/configs";
-import { Builder } from 'xml2js';
+import { Builder, parseStringPromise } from 'xml2js';
 import { randomInt } from "crypto";
 import NodeCache from "node-cache";
 
@@ -113,13 +113,58 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 };
 
-export const portHandler = async (req: Request, res: Response) => {
-    console.log(req.body)
+export const numblexMessageHandler = async (req: Request, res: Response) => {
+    const data = await parseStringPromise(req.body);
+    
+    console.log(data['NPCData']['NPCMessage'][0]['PortRequestAck'][0]);
 
-    const portJson = getPortObject(req);
+    const msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
+    const portID = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0]['PortID'][0];
+
+    console.log(msgID, portID);
+    const soapResponse = `<?xml version="1.0"?>
+    <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+            <Response xmlns="http://example.com/">
+                <Result>Success</Result>
+            </Response>
+        </soap:Body>
+    </soap:Envelope>`;
+    
+    res.header('Content-Type', 'text/xml');
+    res.send(soapResponse);
+};
+
+export const portHandler = async (req: Request, res: Response) => {
+    const portJson = getPortObject(req) as any;
     const portRequestMessage = JsonToXml(portJson);
 
-    return res.status(200).send(portRequestMessage)
+    const xml = await sendNumlexMsg(portRequestMessage).catch(err => {
+        return res.status(500).json({status: 'error', message: err});
+    }) as string;
+
+    const response = await parseStringPromise(xml);
+    
+    if (response['soap:Envelope']['soap:Body'][0]['processNPCMsgResponse'][0]['processNPCMsgReturn'][0])
+        return res.status(200).json({status: "success", 
+        data:
+        {
+            portabilityId: 0,
+            curp: req.body.curp,
+            nombres: req.body.Ivan,
+            apellidoPaterno: req.body.apellidoPaterno,
+            apellidoMaterno: req.body.apellidoMaterno,
+            numeroPortar: req.body.numeroPortar,
+            numeroViral: req.body.numeroViral,
+            nip: req.body.nip,
+            portID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['PortID'],
+            folioID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['FolioID:'],
+            timestamp: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['Timestamp']
+        },
+        xml: xml
+        })
+
+    return res.status(500).json({status: 'error', message: response});
 };
 
 export const imeiData = async (req: Request, res: Response) => {
@@ -399,11 +444,31 @@ export const altan_rute_type = (req: Request, res: Response) => {
 
 /* -------------------------------------------------------------------------- */
 
-const getPortObject = (req: Request): Object => {
-    const userTimestamp = getFormattedTimestamp();
+async function sendNumlexMsg(msg: string) {
+    let Header = new Headers(); 
+    Header.append('Content-Type', 'text/xml');
 
-    const Timestamp = getFormattedTimestamp();
+    try {
+        const response = await fetch(numlexConfigs.MSG_ROUTE, { method: 'POST', headers: Header, body: msg })
+        
+        if (!response.ok) 
+            throw new Error(`SOAP Error: ${response.status}`)
+
+        const xml = await response.text();
+
+        return xml;
+        
+    } catch (error) {
+        console.error('Error al enviar la petición:', error);
+        
+    }
+}
+
+const getPortObject = (req: Request): Object => {
+    const Timestamp = getFormattedTimestamp(false);
     const randomized = randomInt(10000,99999)
+    const portID = `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized.toString().slice(1)}`;
+    const folioId = `${numlexConfigs.VIRAL_IDA}${getFormattedTimestamp(true)}${randomized}`;
 
     return {
         "soapenv:Body": {
@@ -425,10 +490,10 @@ const getPortObject = (req: Request): Object => {
                                 "PortType": "6",
                                 "SubscriberType": "0",
                                 "RecoveryFlagType": "N",
-                                "PortID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
-                                "FolioID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
+                                "PortID": portID,
+                                "FolioID": folioId,
                                 "Timestamp": `${Timestamp}`,
-                                "SubsReqTime": `${userTimestamp}`,
+                                "SubsReqTime": `${Timestamp}`,
                                 "RIDA": `${numlexConfigs.VIRAL_IDA}`,
                                 "RCR": `${numlexConfigs.ALTAN_CR}`,
                                 "TotalPhoneNums": "1",
@@ -537,13 +602,14 @@ const createAction = (action: string, msisdn:  string, offer_id: string, retData
     });
 };
 
-function getFormattedTimestamp() {
+function getFormattedTimestamp(isId: boolean) {
     let now = new Date();
-    let year = now.getFullYear().toString().slice(2);
+    let year = isId ? now.getFullYear().toString().slice(2) : now.getFullYear().toString();
     let month = (now.getMonth() + 1).toString().padStart(2, '0');
     let day = now.getDate().toString().padStart(2, '0');
     let hour = now.getHours().toString().padStart(2, '0');
     let minute = now.getMinutes().toString().padStart(2, '0');
+    let second = isId ? '' : now.getSeconds().toString().padStart(2, '0');
 
-    return year + month + day + hour + minute;
+    return year + month + day + hour + minute + second;
 }
