@@ -123,11 +123,11 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
 
     console.log(msgID, portID);
     const soapResponse = `<?xml version="1.0"?>
-    <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
-            <Response xmlns="http://example.com/">
-                <Result>Success</Result>
-            </Response>
+            <processNPCMsgResponse xmlns = "https://www.portabilidad.mx/">
+                <processNPCMsgReturn>success</processNPCMsgReturn>
+            </processNPCMsgResponse>
         </soap:Body>
     </soap:Envelope>`;
     
@@ -148,20 +148,20 @@ export const portHandler = async (req: Request, res: Response) => {
     if (response['soap:Envelope']['soap:Body'][0]['processNPCMsgResponse'][0]['processNPCMsgReturn'][0])
         return res.status(200).json({status: "success", 
         data:
-        {
-            portabilityId: 0,
-            curp: req.body.curp,
-            nombres: req.body.Ivan,
-            apellidoPaterno: req.body.apellidoPaterno,
-            apellidoMaterno: req.body.apellidoMaterno,
-            numeroPortar: req.body.numeroPortar,
-            numeroViral: req.body.numeroViral,
-            nip: req.body.nip,
-            portID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['PortID'],
-            folioID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['FolioID:'],
-            timestamp: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['Timestamp']
-        },
-        xml: xml
+            {
+                portabilityId: 0,
+                curp: req.body.curp,
+                nombres: req.body.nombres,
+                apellidoPaterno: req.body.apellidoPaterno,
+                apellidoMaterno: req.body.apellidoMaterno,
+                numeroPortar: req.body.numeroPortar,
+                numeroViral: req.body.numeroViral,
+                nip: req.body.nip,
+                portID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['PortID'],
+                folioID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['FolioID'],
+                timestamp: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['Timestamp'],
+                xml: portRequestMessage
+            }
         })
 
     return res.status(500).json({status: 'error', message: response});
