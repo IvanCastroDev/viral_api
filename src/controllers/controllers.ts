@@ -6,7 +6,7 @@ import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
 import { isSandbox } from "../configs/constants/configs";
-import { altanConfigs, numlexConfigs } from "../configs/constants/configs";
+import { altanConfigs, numlexConfigs, odooConfigs } from "../configs/constants/configs";
 import { Builder, parseStringPromise } from 'xml2js';
 import { randomInt } from "crypto";
 import NodeCache from "node-cache";
@@ -115,13 +115,45 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 export const numblexMessageHandler = async (req: Request, res: Response) => {
     const data = await parseStringPromise(req.body);
-    
-    console.log(data['NPCData']['NPCMessage'][0]['PortRequestAck'][0]);
+    const portRequestAck = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0];
 
     const msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
-    const portID = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0]['PortID'][0];
+    const portID = portRequestAck['PortID'][0];
+    const rida = portRequestAck['RIDA'][0];
+    const dida = portRequestAck['DIDA'][0];
+    const rcr = portRequestAck['RCR'][0];
+    const dcr = portRequestAck['DCR'][0];
+    const numberPort = portRequestAck['Numbers'][0]['NumberRange'][0]['NumberFrom'][0];
+    const reasonCode = portRequestAck['ReasonCode'] ? portRequestAck['ReasonCode'][0] : undefined;
 
-    console.log(msgID, portID);
+    if (portID && msgID) {
+        const body = JSON.stringify({
+            jsonrpc: "2.0", 
+            method: "call",
+            params: {
+                portID: portID,
+                msgID: msgID,
+                msg: req.body,
+                rida: rida,
+                number: numberPort,
+                reasonCode: reasonCode ? reasonCode : undefined,
+                dcr: dcr,
+                dida: dida,
+                rcr: rcr
+            }
+        });
+
+        const Header = new Headers({
+            'Content-Type': 'application/json'
+        });
+
+        const route = `${odooConfigs.ODOO_ROUTE}/update_portability`;
+
+        await fetch(route, {method: 'POST', headers: Header, body: body}).catch(err => {
+            console.error('Error at handler numblex mesage', err);
+        });
+    }
+
     const soapResponse = `<?xml version="1.0"?>
     <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
@@ -443,6 +475,53 @@ export const altan_rute_type = (req: Request, res: Response) => {
 };
 
 /* -------------------------------------------------------------------------- */
+
+const altanPortIn = async (port: any, approvedDate: string) => {
+    try {
+        let tokenError = false;
+        let done = false;
+        let Header = new Headers();
+        let retData = {};
+        let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/msisdns/port-in-c`;
+
+        let body = JSON.stringify({
+            "msisdnTransitory": port.msisdn_transitorio,
+            "msisdnPorted": port.msisdn_viral,
+            "imsi": "334140000001360",
+            "approvedDateABD": approvedDate,
+            "dida": port.dida,
+            "rida": port.rida,
+            "dcr": port.dcr,
+            "rcr": port.rcr
+        });
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+    
+            const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                console.log(response)
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"]) {
+                console.log(response)
+            }
+
+            retData = response;
+            done = true;
+        }
+
+    } catch (err) {
+        console.error(err);
+    }
+
+};
 
 async function sendNumlexMsg(msg: string) {
     let Header = new Headers(); 

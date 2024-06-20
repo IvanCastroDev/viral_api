@@ -83,3 +83,9 @@ export const numlexConfigs = {
     VIRAL_IDA: VIRAL_IDA,
     ALTAN_CR: ALTAN_CR
 };
+
+const ODOO_ROUTE = process.env.ODOO_ROUTE || '';
+
+export const odooConfigs = {
+    ODOO_ROUTE: ODOO_ROUTE
+};
