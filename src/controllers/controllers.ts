@@ -10,6 +10,7 @@ import { altanConfigs, numlexConfigs, odooConfigs } from "../configs/constants/c
 import { Builder, parseStringPromise } from 'xml2js';
 import { randomInt } from "crypto";
 import NodeCache from "node-cache";
+import { isWeekend, addDays, setHours, format, subDays } from 'date-fns';
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
@@ -110,48 +111,53 @@ export const pre_activate = async (req: Request, res: Response) => {
         console.error(err);
         return res.status(501).json({status: "error", message: err});
     }
-
 };
 
 export const numblexMessageHandler = async (req: Request, res: Response) => {
     const data = await parseStringPromise(req.body);
-    const portRequestAck = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0];
 
-    const msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
-    const portID = portRequestAck['PortID'][0];
-    const rida = portRequestAck['RIDA'][0];
-    const dida = portRequestAck['DIDA'][0];
-    const rcr = portRequestAck['RCR'][0];
-    const dcr = portRequestAck['DCR'][0];
-    const numberPort = portRequestAck['Numbers'][0]['NumberRange'][0]['NumberFrom'][0];
-    const reasonCode = portRequestAck['ReasonCode'] ? portRequestAck['ReasonCode'][0] : undefined;
+    let msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
+    let portReq = {} as any;
+    
+    if (msgID === numlexConfigs.PORT_REQUEST_ACK_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0];
 
-    if (portID && msgID) {
-        const body = JSON.stringify({
-            jsonrpc: "2.0", 
-            method: "call",
-            params: {
-                portID: portID,
-                msgID: msgID,
-                msg: req.body,
-                rida: rida,
-                number: numberPort,
-                reasonCode: reasonCode ? reasonCode : undefined,
-                dcr: dcr,
-                dida: dida,
-                rcr: rcr
-            }
-        });
+    if (msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortToBeScheduled'][0];
 
-        const Header = new Headers({
-            'Content-Type': 'application/json'
-        });
+    if (msgID === numlexConfigs.PORT_REQUEST_SCHEDULED_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortScheduled'][0];
 
-        const route = `${odooConfigs.ODOO_ROUTE}/update_portability`;
+    if (msgID === numlexConfigs.PORT_ERROR_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['ErrorNotification'][0];
 
-        await fetch(route, {method: 'POST', headers: Header, body: body}).catch(err => {
-            console.error('Error at handler numblex mesage', err);
-        });
+    const msgData = {
+        msgID: msgID,
+        portID: portReq['PortID'][0],
+        rida: portReq['RIDA'][0],
+        dida: portReq['DIDA'][0],
+        rcr: portReq['RCR'][0],
+        dcr: portReq['DCR'][0],
+        numberPort: portReq['Numbers'][0]['NumberRange'][0]['NumberFrom'][0],
+        reasonCode: portReq['ReasonCode'] ? portReq['ReasonCode'][0] : undefined,
+        xml: req.body
+    }
+
+    if (msgData.portID && msgData.msgID) {
+        await sendPortMsg(msgData); 
+        if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
+            const portData = await getPortData(msgData.portID);
+            const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
+            const dateToSchedule = findEligibleDate(maxDateToSchedule);
+
+            await altanPortIn(portData, maxDateToSchedule);
+
+            portData['PortExecDate'] = dateToSchedule;
+            
+            const portScheduleMessage = JsonToXml(getSchedulePortObject(portData))
+
+            await sendNumlexMsg(portScheduleMessage);
+        }
     }
 
     const soapResponse = `<?xml version="1.0"?>
@@ -476,6 +482,35 @@ export const altan_rute_type = (req: Request, res: Response) => {
 
 /* -------------------------------------------------------------------------- */
 
+function findEligibleDate(date: string) {
+    const year = parseInt(date.substring(0, 4));
+    const month = parseInt(date.substring(4, 6)) - 1;
+    const day = parseInt(date.substring(6, 8));
+    const hour = parseInt(date.substring(8, 10));
+    const minute = parseInt(date.substring(10, 12));
+
+    let givenDate = new Date(Date.UTC(year, month, day, hour, minute));
+
+    let targetDate = subDays(givenDate, 1);
+
+    const currentDate = new Date();
+
+    if (targetDate < currentDate) {
+        targetDate = currentDate;
+    }
+
+    if (targetDate.getUTCHours() < 9 || targetDate.getUTCHours() > 17) {
+        targetDate = setHours(targetDate, 9);
+    }
+
+    while (isWeekend(targetDate)) {
+        targetDate = addDays(targetDate, 1);
+        targetDate = setHours(targetDate, 9);
+    }
+
+    return format(targetDate, "yyyyMMddHHmmss");
+}
+
 const altanPortIn = async (port: any, approvedDate: string) => {
     try {
         let tokenError = false;
@@ -485,10 +520,10 @@ const altanPortIn = async (port: any, approvedDate: string) => {
         let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/msisdns/port-in-c`;
 
         let body = JSON.stringify({
-            "msisdnTransitory": port.msisdn_transitorio,
-            "msisdnPorted": port.msisdn_viral,
-            "imsi": "334140000001360",
-            "approvedDateABD": approvedDate,
+            "msisdnTransitory": port.numeroViral,
+            "msisdnPorted": port.numeroPortar,
+            "imsi": port.imsi,
+            "approvedDateABD": approvedDate.substring(0, 8),
             "dida": port.dida,
             "rida": port.rida,
             "dcr": port.dcr,
@@ -517,11 +552,66 @@ const altanPortIn = async (port: any, approvedDate: string) => {
             done = true;
         }
 
+        return retData;
+
     } catch (err) {
         console.error(err);
     }
 
 };
+
+async function getPortData(portId: string) {
+    const body = JSON.stringify({
+        jsonrpc: "2.0", 
+        method: "call",
+        params: {
+            portId: portId
+        }
+    })
+
+    const Header = new Headers({
+        'Content-Type': 'application/json'
+    });
+
+    const route = `${odooConfigs.ODOO_ROUTE}/get_port`;
+    let result = {} as any;
+
+    try  {
+        result = await fetch(route, {method: 'POST', headers: Header, body: body}).then(r => r.json())
+    } catch (err) {
+        console.error('Error at get port data', err);
+    }
+
+    return result.result;
+}
+
+async function sendPortMsg(port: any) {
+    const body = JSON.stringify({
+        jsonrpc: "2.0", 
+        method: "call",
+        params: {
+            portID: port.portID,
+            msgID: port.msgID,
+            msg: port.xml,
+            rida: port.rida,
+            number: port.numberPort,
+            reasonCode: port.reasonCode ? port.reasonCode : undefined,
+            dcr: port.dcr,
+            dida: port.dida,
+            rcr: port.rcr
+        }
+    });
+
+    const Header = new Headers({
+        'Content-Type': 'application/json'
+    });
+
+    const route = `${odooConfigs.ODOO_ROUTE}/update_portability`;
+
+    await fetch(route, {method: 'POST', headers: Header, body: body}).catch(err => {
+        console.error('Error at handler numblex mesage', err);
+    });
+}
 
 async function sendNumlexMsg(msg: string) {
     let Header = new Headers(); 
@@ -585,6 +675,52 @@ const getPortObject = (req: Request): Object => {
                                 "Pin": `${req.body.nip}`,
                                 "Comments": "",
                                 "NumOfFiles": "0"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+const getSchedulePortObject = (port: any): Object => {
+    const Timestamp = getFormattedTimestamp(false);
+
+    return {
+        "soapenv:Body": {
+            "por:processNPCMsg": {
+                "por:userId": `${numlexConfigs.NUMLEX_USER}`,
+                "por:password": `${numlexConfigs.NUMLEX_PASS}`,
+                "por:xmlMsg": {
+                    "NPCData": {
+                        "MessageHeader": {
+                            "TransTimestamp": `${Timestamp}`,
+                            "Sender": `${numlexConfigs.VIRAL_IDA}`,
+                            "NumOfMessages": "1"
+                        },
+                        "NPCMessage": {
+                            "$": {
+                                "MessageID": "1006"
+                            },
+                            "PortScheduled": {
+                                "PortType": "6",
+                                "SubscriberType": "0",
+                                "RecoveryFlagType": "N",
+                                "PortID": port.portID,
+                                "Timestamp": `${Timestamp}`,
+                                "RIDA": `${port.rida}`,
+                                "RCR": `${port.rcr}`,
+                                "DIDA": `${port.dida}`,
+                                "DCR": `${port.dcr}`,
+                                "TotalPhoneNums": "1",
+                                "Numbers": {
+                                    "NumberRange": {
+                                        "NumberFrom": `${port.numeroPortar}`,
+                                        "NumberTo": `${port.numeroPortar}`
+                                    }
+                                },
+                                'PortExecDate': port.PortExecDate
                             }
                         }
                     }
