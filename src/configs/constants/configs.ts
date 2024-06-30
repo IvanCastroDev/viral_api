@@ -70,14 +70,27 @@ export const altanConfigs = {
 export const isSandbox = ALTAN_SANDBOX;
 
 // Numlex variables
+const NUMLEX_MSG_ROUTE = process.env.NUMLEX_MSG_ROUTE || '';
 const NUMLEX_USER = process.env.NUMLEX_USER;
 const NUMLEX_PASS = process.env.NUMLEX_PASS;
 const VIRAL_IDA = process.env.VIRAL_IDA;
 const ALTAN_CR = process.env.ALTAN_CR;
 
 export const numlexConfigs = {
+    MSG_ROUTE: NUMLEX_MSG_ROUTE,
     NUMLEX_USER: NUMLEX_USER,
     NUMLEX_PASS:  NUMLEX_PASS,
     VIRAL_IDA: VIRAL_IDA,
-    ALTAN_CR: ALTAN_CR
+    ALTAN_CR: ALTAN_CR,
+    PORT_REQUEST_ACK_CODE:  '1002',
+    PORT_SCHEDULE_AUTH_CODE: '1005',
+    PORT_REQUEST_SCHEDULED_CODE: '1007',
+    PORT_ERROR_CODE: '9999'
+
+};
+
+const ODOO_ROUTE = process.env.ODOO_ROUTE || '';
+
+export const odooConfigs = {
+    ODOO_ROUTE: ODOO_ROUTE
 };

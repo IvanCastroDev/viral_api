@@ -6,10 +6,11 @@ import jwt from "jsonwebtoken";
 import { hashConfigs } from "../configs/constants/configs";
 import { msisdnProfile } from "../interfaces/altan.interfaces";
 import { isSandbox } from "../configs/constants/configs";
-import { altanConfigs, numlexConfigs } from "../configs/constants/configs";
-import { Builder } from 'xml2js';
+import { altanConfigs, numlexConfigs, odooConfigs } from "../configs/constants/configs";
+import { Builder, parseStringPromise } from 'xml2js';
 import { randomInt } from "crypto";
 import NodeCache from "node-cache";
+import { isWeekend, addDays, setHours, format, subDays } from 'date-fns';
 
 const altanURL = "https://altanredes-prod.apigee.net";
 const sandbox = "-sandbox";
@@ -110,16 +111,98 @@ export const pre_activate = async (req: Request, res: Response) => {
         console.error(err);
         return res.status(501).json({status: "error", message: err});
     }
+};
 
+export const numblexMessageHandler = async (req: Request, res: Response) => {
+    const data = await parseStringPromise(req.body);
+
+    let msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
+    let portReq = {} as any;
+    
+    if (msgID === numlexConfigs.PORT_REQUEST_ACK_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortRequestAck'][0];
+
+    if (msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortToBeScheduled'][0];
+
+    if (msgID === numlexConfigs.PORT_REQUEST_SCHEDULED_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['PortScheduled'][0];
+
+    if (msgID === numlexConfigs.PORT_ERROR_CODE)
+        portReq = data['NPCData']['NPCMessage'][0]['ErrorNotification'][0];
+
+    const msgData = {
+        msgID: msgID,
+        portID: portReq['PortID'][0],
+        rida: portReq['RIDA'][0],
+        dida: portReq['DIDA'][0],
+        rcr: portReq['RCR'][0],
+        dcr: portReq['DCR'][0],
+        numberPort: portReq['Numbers'][0]['NumberRange'][0]['NumberFrom'][0],
+        reasonCode: portReq['ReasonCode'] ? portReq['ReasonCode'][0] : undefined,
+        xml: req.body
+    }
+
+    if (msgData.portID && msgData.msgID) {
+        await sendPortMsg(msgData); 
+        if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
+            const portData = await getPortData(msgData.portID);
+            const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
+            const dateToSchedule = findEligibleDate(maxDateToSchedule);
+
+            await altanPortIn(portData, maxDateToSchedule);
+
+            portData['PortExecDate'] = dateToSchedule;
+            
+            const portScheduleMessage = JsonToXml(getSchedulePortObject(portData))
+
+            await sendNumlexMsg(portScheduleMessage);
+        }
+    }
+
+    const soapResponse = `<?xml version="1.0"?>
+    <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+        <soap:Body>
+            <processNPCMsgResponse xmlns = "https://www.portabilidad.mx/">
+                <processNPCMsgReturn>success</processNPCMsgReturn>
+            </processNPCMsgResponse>
+        </soap:Body>
+    </soap:Envelope>`;
+    
+    res.header('Content-Type', 'text/xml');
+    res.send(soapResponse);
 };
 
 export const portHandler = async (req: Request, res: Response) => {
-    console.log(req.body)
-
-    const portJson = getPortObject(req);
+    const portJson = getPortObject(req) as any;
     const portRequestMessage = JsonToXml(portJson);
 
-    return res.status(200).send(portRequestMessage)
+    const xml = await sendNumlexMsg(portRequestMessage).catch(err => {
+        return res.status(500).json({status: 'error', message: err});
+    }) as string;
+
+    const response = await parseStringPromise(xml);
+    
+    if (response['soap:Envelope']['soap:Body'][0]['processNPCMsgResponse'][0]['processNPCMsgReturn'][0])
+        return res.status(200).json({status: "success", 
+        data:
+            {
+                portabilityId: 0,
+                curp: req.body.curp,
+                nombres: req.body.nombres,
+                apellidoPaterno: req.body.apellidoPaterno,
+                apellidoMaterno: req.body.apellidoMaterno,
+                numeroPortar: req.body.numeroPortar,
+                numeroViral: req.body.numeroViral,
+                nip: req.body.nip,
+                portID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['PortID'],
+                folioID: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['FolioID'],
+                timestamp: portJson['soapenv:Body']['por:processNPCMsg']['por:xmlMsg']['NPCData']['NPCMessage']['PortRequest']['Timestamp'],
+                xml: portRequestMessage
+            }
+        })
+
+    return res.status(500).json({status: 'error', message: response});
 };
 
 export const imeiData = async (req: Request, res: Response) => {
@@ -399,11 +482,162 @@ export const altan_rute_type = (req: Request, res: Response) => {
 
 /* -------------------------------------------------------------------------- */
 
-const getPortObject = (req: Request): Object => {
-    const userTimestamp = getFormattedTimestamp();
+function findEligibleDate(date: string) {
+    const year = parseInt(date.substring(0, 4));
+    const month = parseInt(date.substring(4, 6)) - 1;
+    const day = parseInt(date.substring(6, 8));
+    const hour = parseInt(date.substring(8, 10));
+    const minute = parseInt(date.substring(10, 12));
 
-    const Timestamp = getFormattedTimestamp();
+    let givenDate = new Date(Date.UTC(year, month, day, hour, minute));
+
+    let targetDate = subDays(givenDate, 1);
+
+    const currentDate = new Date();
+
+    if (targetDate < currentDate) {
+        targetDate = currentDate;
+    }
+
+    if (targetDate.getUTCHours() < 9 || targetDate.getUTCHours() > 17) {
+        targetDate = setHours(targetDate, 9);
+    }
+
+    while (isWeekend(targetDate)) {
+        targetDate = addDays(targetDate, 1);
+        targetDate = setHours(targetDate, 9);
+    }
+
+    return format(targetDate, "yyyyMMddHHmmss");
+}
+
+const altanPortIn = async (port: any, approvedDate: string) => {
+    try {
+        let tokenError = false;
+        let done = false;
+        let Header = new Headers();
+        let retData = {};
+        let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/msisdns/port-in-c`;
+
+        let body = JSON.stringify({
+            "msisdnTransitory": port.numeroViral,
+            "msisdnPorted": port.numeroPortar,
+            "imsi": port.imsi,
+            "approvedDateABD": approvedDate.substring(0, 8),
+            "dida": port.dida,
+            "rida": port.rida,
+            "dcr": port.dcr,
+            "rcr": port.rcr
+        });
+
+        while (!done) {
+            let token = await getAltanToken(tokenError);
+
+            Header.append("Authorization", `Bearer ${token}`);
+            Header.append("Content-Type", "application/json");
+    
+            const response = await fetch(route, { method: 'POST', headers: Header, body: body }).then((r) => r.json());
+
+            if (response["description"] === "Access token expired" || response["description"] === "Invalid access token") {
+                console.log(response)
+                tokenError = true;
+                continue;
+            }
+
+            if (response["description"]) {
+                console.log(response)
+            }
+
+            retData = response;
+            done = true;
+        }
+
+        return retData;
+
+    } catch (err) {
+        console.error(err);
+    }
+
+};
+
+async function getPortData(portId: string) {
+    const body = JSON.stringify({
+        jsonrpc: "2.0", 
+        method: "call",
+        params: {
+            portId: portId
+        }
+    })
+
+    const Header = new Headers({
+        'Content-Type': 'application/json'
+    });
+
+    const route = `${odooConfigs.ODOO_ROUTE}/get_port`;
+    let result = {} as any;
+
+    try  {
+        result = await fetch(route, {method: 'POST', headers: Header, body: body}).then(r => r.json())
+    } catch (err) {
+        console.error('Error at get port data', err);
+    }
+
+    return result.result;
+}
+
+async function sendPortMsg(port: any) {
+    const body = JSON.stringify({
+        jsonrpc: "2.0", 
+        method: "call",
+        params: {
+            portID: port.portID,
+            msgID: port.msgID,
+            msg: port.xml,
+            rida: port.rida,
+            number: port.numberPort,
+            reasonCode: port.reasonCode ? port.reasonCode : undefined,
+            dcr: port.dcr,
+            dida: port.dida,
+            rcr: port.rcr
+        }
+    });
+
+    const Header = new Headers({
+        'Content-Type': 'application/json'
+    });
+
+    const route = `${odooConfigs.ODOO_ROUTE}/update_portability`;
+
+    await fetch(route, {method: 'POST', headers: Header, body: body}).catch(err => {
+        console.error('Error at handler numblex mesage', err);
+    });
+}
+
+async function sendNumlexMsg(msg: string) {
+    let Header = new Headers(); 
+    Header.append('Content-Type', 'text/xml');
+
+    try {
+        const response = await fetch(numlexConfigs.MSG_ROUTE, { method: 'POST', headers: Header, body: msg })
+        
+        if (!response.ok) 
+            throw new Error(`SOAP Error: ${response.status}`)
+
+        const xml = await response.text();
+
+        return xml;
+        
+    } catch (error) {
+        console.error('Error al enviar la petición:', error);
+        
+    }
+}
+
+const getPortObject = (req: Request): Object => {
+    const Timestamp = getFormattedTimestamp(false);
     const randomized = randomInt(10000,99999)
+    const portID = `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized.toString().slice(1)}`;
+    const folioId = `${numlexConfigs.VIRAL_IDA}${getFormattedTimestamp(true)}${randomized}`;
 
     return {
         "soapenv:Body": {
@@ -425,10 +659,10 @@ const getPortObject = (req: Request): Object => {
                                 "PortType": "6",
                                 "SubscriberType": "0",
                                 "RecoveryFlagType": "N",
-                                "PortID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
-                                "FolioID": `${numlexConfigs.VIRAL_IDA}${Timestamp}${randomized}`,
+                                "PortID": portID,
+                                "FolioID": folioId,
                                 "Timestamp": `${Timestamp}`,
-                                "SubsReqTime": `${userTimestamp}`,
+                                "SubsReqTime": `${Timestamp}`,
                                 "RIDA": `${numlexConfigs.VIRAL_IDA}`,
                                 "RCR": `${numlexConfigs.ALTAN_CR}`,
                                 "TotalPhoneNums": "1",
@@ -441,6 +675,52 @@ const getPortObject = (req: Request): Object => {
                                 "Pin": `${req.body.nip}`,
                                 "Comments": "",
                                 "NumOfFiles": "0"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+const getSchedulePortObject = (port: any): Object => {
+    const Timestamp = getFormattedTimestamp(false);
+
+    return {
+        "soapenv:Body": {
+            "por:processNPCMsg": {
+                "por:userId": `${numlexConfigs.NUMLEX_USER}`,
+                "por:password": `${numlexConfigs.NUMLEX_PASS}`,
+                "por:xmlMsg": {
+                    "NPCData": {
+                        "MessageHeader": {
+                            "TransTimestamp": `${Timestamp}`,
+                            "Sender": `${numlexConfigs.VIRAL_IDA}`,
+                            "NumOfMessages": "1"
+                        },
+                        "NPCMessage": {
+                            "$": {
+                                "MessageID": "1006"
+                            },
+                            "PortScheduled": {
+                                "PortType": "6",
+                                "SubscriberType": "0",
+                                "RecoveryFlagType": "N",
+                                "PortID": port.portID,
+                                "Timestamp": `${Timestamp}`,
+                                "RIDA": `${port.rida}`,
+                                "RCR": `${port.rcr}`,
+                                "DIDA": `${port.dida}`,
+                                "DCR": `${port.dcr}`,
+                                "TotalPhoneNums": "1",
+                                "Numbers": {
+                                    "NumberRange": {
+                                        "NumberFrom": `${port.numeroPortar}`,
+                                        "NumberTo": `${port.numeroPortar}`
+                                    }
+                                },
+                                'PortExecDate': port.PortExecDate
                             }
                         }
                     }
@@ -537,13 +817,14 @@ const createAction = (action: string, msisdn:  string, offer_id: string, retData
     });
 };
 
-function getFormattedTimestamp() {
+function getFormattedTimestamp(isId: boolean) {
     let now = new Date();
-    let year = now.getFullYear().toString().slice(2);
+    let year = isId ? now.getFullYear().toString().slice(2) : now.getFullYear().toString();
     let month = (now.getMonth() + 1).toString().padStart(2, '0');
     let day = now.getDate().toString().padStart(2, '0');
     let hour = now.getHours().toString().padStart(2, '0');
     let minute = now.getMinutes().toString().padStart(2, '0');
+    let second = isId ? '' : now.getSeconds().toString().padStart(2, '0');
 
-    return year + month + day + hour + minute;
+    return year + month + day + hour + minute + second;
 }

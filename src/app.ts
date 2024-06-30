@@ -19,6 +19,9 @@ app.use(cors({
 app.use(express.urlencoded({extended: true})); 
 app.use(express.json());
 app.use(bodyParser.json());
+app.use(bodyParser.text({
+  type: '*/*'
+}));
 
 // Loggs
 app.use((req, res, next) => {
