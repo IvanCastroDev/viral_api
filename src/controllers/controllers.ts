@@ -147,6 +147,23 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
         await sendPortMsg(msgData); 
         if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
             const portData = await getPortData(msgData.portID);
+            console.log(portData)
+
+            if (!portData || Object.keys(portData).length === 0) {
+                const soapResponse = `<?xml version="1.0"?>
+                <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+                    <soap:Body>
+                        <processNPCMsgResponse xmlns = "https://www.portabilidad.mx/">
+                            <processNPCMsgReturn>success</processNPCMsgReturn>
+                        </processNPCMsgResponse>
+                    </soap:Body>
+                </soap:Envelope>`;
+                
+                res.header('Content-Type', 'text/xml');
+                res.send(soapResponse);
+                return res;
+            }
+            
             const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
             const dateToSchedule = findEligibleDate(maxDateToSchedule);
 
@@ -171,6 +188,8 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
     
     res.header('Content-Type', 'text/xml');
     res.send(soapResponse);
+
+    return res;
 };
 
 export const portHandler = async (req: Request, res: Response) => {
