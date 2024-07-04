@@ -149,7 +149,7 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
             const portData = await getPortData(msgData.portID);
             console.log(portData)
 
-            if (!portData) {
+            if (!portData || Object.keys(portData).length === 0) {
                 const soapResponse = `<?xml version="1.0"?>
                 <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
                     <soap:Body>
