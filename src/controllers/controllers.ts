@@ -114,7 +114,7 @@ export const pre_activate = async (req: Request, res: Response) => {
 };
 
 export const numblexMessageHandler = async (req: Request, res: Response) => {
-    const data = await parseStringPromise(req.body);
+    const data = await parseStringPromise(req.body['Body']['processNPCMsg']['xmlMsg']);
 
     let msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
     let portReq = {} as any;
@@ -130,6 +130,9 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
 
     if (msgID === numlexConfigs.PORT_ERROR_CODE)
         portReq = data['NPCData']['NPCMessage'][0]['ErrorNotification'][0];
+
+    if (Object.keys(portReq).length === 0)
+        return returnSuccessMsg(res);
 
     const msgData = {
         msgID: msgID,
@@ -150,18 +153,7 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
             console.log(portData)
 
             if (!portData || Object.keys(portData).length === 0) {
-                const soapResponse = `<?xml version="1.0"?>
-                <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
-                    <soap:Body>
-                        <processNPCMsgResponse xmlns = "https://www.portabilidad.mx/">
-                            <processNPCMsgReturn>success</processNPCMsgReturn>
-                        </processNPCMsgResponse>
-                    </soap:Body>
-                </soap:Envelope>`;
-                
-                res.header('Content-Type', 'text/xml');
-                res.send(soapResponse);
-                return res;
+                return returnSuccessMsg(res);
             }
             
             const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
@@ -177,6 +169,11 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
         }
     }
 
+    return returnSuccessMsg(res);
+};
+
+
+const returnSuccessMsg = (res: Response) => {
     const soapResponse = `<?xml version="1.0"?>
     <soap:Envelope xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
         <soap:Body>
@@ -188,8 +185,6 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
     
     res.header('Content-Type', 'text/xml');
     res.send(soapResponse);
-
-    return res;
 };
 
 export const portHandler = async (req: Request, res: Response) => {
