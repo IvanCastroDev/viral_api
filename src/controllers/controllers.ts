@@ -114,6 +114,7 @@ export const pre_activate = async (req: Request, res: Response) => {
 };
 
 export const numblexMessageHandler = async (req: Request, res: Response) => {
+    console.log(req.body);
     const data = await parseStringPromise(req.body['Body']['processNPCMsg']['xmlMsg']);
 
     let msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
