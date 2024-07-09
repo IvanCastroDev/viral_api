@@ -115,7 +115,7 @@ export const pre_activate = async (req: Request, res: Response) => {
 
 export const numblexMessageHandler = async (req: Request, res: Response) => {
     console.log(req.body);
-    const data = await parseStringPromise(req.body['Body']['processNPCMsg']['xmlMsg']);
+    const data = await parseStringPromise(req.body);
 
     let msgID = data['NPCData']['NPCMessage'][0]['$']['MessageID'];
     let portReq = {} as any;
@@ -135,13 +135,15 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
     if (Object.keys(portReq).length === 0)
         return returnSuccessMsg(res);
 
+    console.log(portReq);
+
     const msgData = {
         msgID: msgID,
         portID: portReq['PortID'][0],
         rida: portReq['RIDA'][0],
-        dida: portReq['DIDA'][0],
+        dida: portReq['DIDA'] ? portReq['DIDA'][0] : '',
         rcr: portReq['RCR'][0],
-        dcr: portReq['DCR'][0],
+        dcr: portReq['DCR'] ? portReq['DCR'][0] : '',
         numberPort: portReq['Numbers'][0]['NumberRange'][0]['NumberFrom'][0],
         reasonCode: portReq['ReasonCode'] ? portReq['ReasonCode'][0] : undefined,
         xml: req.body
