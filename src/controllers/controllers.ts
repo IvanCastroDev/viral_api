@@ -153,6 +153,10 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
         await sendPortMsg(msgData); 
         if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
             const portData = await getPortData(msgData.portID);
+            portData['rida'] = msgData['rida'];
+            portData['dida'] = msgData['dida'];
+            portData['rcr'] = msgData['rcr'];
+            portData['dcr'] = msgData['dcr'];
             console.log(portData)
 
             if (!portData || Object.keys(portData).length === 0) {
@@ -161,6 +165,7 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
             
             const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
             const dateToSchedule = findEligibleDate(maxDateToSchedule);
+            console.log(dateToSchedule)
 
             await altanPortIn(portData, maxDateToSchedule);
 
@@ -507,25 +512,23 @@ function findEligibleDate(date: string) {
     const minute = parseInt(date.substring(10, 12));
 
     let givenDate = new Date(Date.UTC(year, month, day, hour, minute));
-
     let targetDate = subDays(givenDate, 1);
 
-    const currentDate = new Date();
+    let currentDate = new Date();
 
-    if (targetDate < currentDate) {
-        targetDate = currentDate;
+    if (currentDate.getUTCHours() > 14) {
+        currentDate = setHours(currentDate, 9);
+        currentDate = addDays(currentDate, 1);
     }
 
-    if (targetDate.getUTCHours() < 9 || targetDate.getUTCHours() > 17) {
-        targetDate = setHours(targetDate, 9);
+    currentDate = setHours(currentDate, currentDate.getUTCHours() + 1);
+
+    while (isWeekend(currentDate) && currentDate < targetDate) {
+        currentDate = addDays(currentDate, 1);
+        currentDate = setHours(currentDate, 9);
     }
 
-    while (isWeekend(targetDate)) {
-        targetDate = addDays(targetDate, 1);
-        targetDate = setHours(targetDate, 9);
-    }
-
-    return format(targetDate, "yyyyMMddHHmmss");
+    return format(currentDate, "yyyyMMddHHmmss");
 }
 
 const altanPortIn = async (port: any, approvedDate: string) => {
