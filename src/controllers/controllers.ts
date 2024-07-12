@@ -149,19 +149,22 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
         xml: req.body
     }
 
+    console.log(msgData)
+
     if (msgData.portID && msgData.msgID) {
         await sendPortMsg(msgData); 
         if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
             const portData = await getPortData(msgData.portID);
+
+            if (!portData || Object.keys(portData).length === 0) {
+                return returnSuccessMsg(res);
+            }
+
             portData['rida'] = msgData['rida'];
             portData['dida'] = msgData['dida'];
             portData['rcr'] = msgData['rcr'];
             portData['dcr'] = msgData['dcr'];
             console.log(portData)
-
-            if (!portData || Object.keys(portData).length === 0) {
-                return returnSuccessMsg(res);
-            }
             
             const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
             const dateToSchedule = findEligibleDate(maxDateToSchedule);
