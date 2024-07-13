@@ -6,6 +6,9 @@ import logging from './configs/log/logs';
 import testRoute from "./controllers/status";
 import Routes from "./routes/routes";
 import bodyParser from 'body-parser';
+import swaggerUi from 'swagger-ui-express';
+
+import specs from './swagger';
 
 // Initalize the server
 const app = express();
@@ -22,6 +25,8 @@ app.use(bodyParser.json());
 app.use(bodyParser.text({
   type: '*/*'
 }));
+
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Loggs
 app.use((req, res, next) => {
