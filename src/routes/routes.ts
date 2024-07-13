@@ -304,7 +304,7 @@ export default routes;
   *                 message:
   *                   type: string
   *       200:
-  *         description: Detalles de la solicitud de portabilidad procesada correctamente.
+  *         description: Detalles de la operación efectuada correctamente.
   *         content:
   *           application/json:
   *             schema:
