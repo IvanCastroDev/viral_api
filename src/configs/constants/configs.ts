@@ -94,3 +94,11 @@ const ODOO_ROUTE = process.env.ODOO_ROUTE || '';
 export const odooConfigs = {
     ODOO_ROUTE: ODOO_ROUTE
 };
+
+const DOC_USER = process.env.DOC_USR || '';
+const DOC_PASS = process.env.DOC_PASS || '';
+
+export const docConfigs = {
+    DOC_USER: DOC_USER,
+    DOC_PASS: DOC_PASS
+};
