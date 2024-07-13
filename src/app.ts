@@ -7,13 +7,20 @@ import testRoute from "./controllers/status";
 import Routes from "./routes/routes";
 import bodyParser from 'body-parser';
 import swaggerUi from 'swagger-ui-express';
-
+import basicAuth from 'express-basic-auth';
 import specs from './swagger';
+import { docConfigs } from './configs/constants/configs';
 
 // Initalize the server
 const app = express();
 const version = "/v1";
 const NAMESPACE = "SERVER";
+
+const myAuthorizer = (username: string, password: string) => {
+  const userMatches = basicAuth.safeCompare(username, docConfigs.DOC_USER);
+  const passwordMatches = basicAuth.safeCompare(password, docConfigs.DOC_PASS);
+  return userMatches && passwordMatches;
+}
 
 // Add initial configuration
 app.use(cors({
@@ -26,7 +33,10 @@ app.use(bodyParser.text({
   type: '*/*'
 }));
 
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+app.use('/api-docs', basicAuth({
+  authorizer: myAuthorizer,
+  challenge: true
+}), swaggerUi.serve, swaggerUi.setup(specs));
 
 // Loggs
 app.use((req, res, next) => {
