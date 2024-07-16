@@ -152,32 +152,37 @@ export const numblexMessageHandler = async (req: Request, res: Response) => {
     console.log(msgData)
 
     if (msgData.portID && msgData.msgID) {
-        await sendPortMsg(msgData); 
-        if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
-            const portData = await getPortData(msgData.portID);
+        await sendPortMsg(msgData);
 
+        const portData = await getPortData(msgData.portID);
+
+        portData['rida'] = msgData['rida'];
+        portData['dida'] = msgData['dida'];
+        portData['rcr'] = msgData['rcr'];
+        portData['dcr'] = msgData['dcr'];
+
+        console.log(portData)
+
+        if (msgData.msgID === numlexConfigs.PORT_SCHEDULE_AUTH_CODE) {
             if (!portData || Object.keys(portData).length === 0) {
                 return returnSuccessMsg(res);
             }
 
-            portData['rida'] = msgData['rida'];
-            portData['dida'] = msgData['dida'];
-            portData['rcr'] = msgData['rcr'];
-            portData['dcr'] = msgData['dcr'];
-            console.log(portData)
-            
             const maxDateToSchedule = portReq['DeadlineToSchedulePort'][0];
             const dateToSchedule = findEligibleDate(maxDateToSchedule);
-            console.log(dateToSchedule)
-
-            await altanPortIn(portData, maxDateToSchedule);
+            
+            console.log(dateToSchedule);
 
             portData['PortExecDate'] = dateToSchedule;
             
-            const portScheduleMessage = JsonToXml(getSchedulePortObject(portData))
+            const portScheduleMessage = JsonToXml(getSchedulePortObject(portData));
 
             await sendNumlexMsg(portScheduleMessage);
-        }
+        } else if (msgData.msgID === numlexConfigs.PORT_REQUEST_SCHEDULED_CODE) {
+            const DateToSchedule = portReq['PortExecDate'][0];
+
+            await altanPortIn(portData, DateToSchedule);
+        };
     }
 
     return returnSuccessMsg(res);
@@ -541,7 +546,7 @@ const altanPortIn = async (port: any, approvedDate: string) => {
         let Header = new Headers();
         let retData = {};
         let route = `${altanURL}/ac${isSandbox ? sandbox : ""}/v1/msisdns/port-in-c`;
-
+        console.log(route)
         let body = JSON.stringify({
             "msisdnTransitory": port.numeroViral,
             "msisdnPorted": port.numeroPortar,
@@ -552,6 +557,7 @@ const altanPortIn = async (port: any, approvedDate: string) => {
             "dcr": port.dcr,
             "rcr": port.rcr
         });
+        console.log(body)
 
         while (!done) {
             let token = await getAltanToken(tokenError);
