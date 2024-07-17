@@ -1,8 +1,8 @@
 {
-  "name": "login",
-  "version": "0.1.0",
-  "description": "Authentication system",
-  "main": "index.js",
+  "name": "viral_api",
+  "version": "1.5.0",
+  "description": "API VIRAL",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "tsc-watch --onSuccess \"node build/app.js\" ",
@@ -12,8 +12,8 @@
     "lint": "eslint . --ext .ts"
   },
   "keywords": [
-    "login",
-    "auth"
+    "REST",
+    "API"
   ],
   "author": "Ivan Castro",
   "license": "MIT",
